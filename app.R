@@ -9,10 +9,10 @@ library(readr)
 library(janitor)
 library(dplyr)
 
+# Load and clean data
 zara_data <- read.csv("zara.csv", sep = ";", quote = "\"", stringsAsFactors = FALSE) %>%
   janitor::clean_names()
 
-# Preprocess data
 model_data <- zara_data %>%
   select(sales_volume, price, product_category, section, promotion, seasonal, brand) %>%
   drop_na() %>%
@@ -27,10 +27,11 @@ model_data$predicted_sales <- predict(model, newdata = model_data)
 ui <- dashboardPage(
   dashboardHeader(
     title = tags$div(
-      style = "display: flex; align-items: center; justify-content: center; width: 100%; padding-top: 5px",
-      tags$img(src = "zaralogo.png", style = "max-height: 40px; height: auto;")
+      style = "display: flex; align-items: center; padding-left: 10px;",
+      tags$img(src = "zaralogo.png", style = "height: 40px;")
     )
-  ),
+  )
+  ,
   
   dashboardSidebar(
     sidebarMenu(
@@ -41,28 +42,16 @@ ui <- dashboardPage(
   ),
   
   dashboardBody(
-    tags$head(
-      tags$style(HTML("
-        .main-sidebar {
-          position: fixed;
-          height: 100%;
-          overflow: auto;
-        }
-        .content-wrapper, .right-side {
-          margin-left: 230px;
-          padding: 15px;
-        }
-        @media (max-width: 768px) {
-          .main-sidebar {
-            position: relative;
-            width: 100%;
-          }
-          .content-wrapper, .right-side {
-            margin-left: 0;
-          }
-        }
-      "))
-    ),
+    # Remove the old custom sidebar-open CSS; rely on shinydashboard's default .sidebar-collapse behavior
+    
+    # Only keep your custom JS to toggle sidebar-collapse on body on clicking hamburger
+    tags$script(HTML("
+      $(document).on('shiny:connected', function() {
+        $('.sidebar-toggle').on('click', function() {
+          $('body').toggleClass('sidebar-collapse');
+        });
+      });
+    ")),
     
     tabItems(
       tabItem(tabName = "overview",
