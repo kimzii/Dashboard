@@ -1,0 +1,12 @@
+name: ZaraDashboard
+title: ZaraDashboard
+username: kimzii
+account: kimzii
+server: shinyapps.io
+hostUrl: https://api.shinyapps.io/v1
+appId: 14811741
+bundleId: 10329013
+url: https://kimzii.shinyapps.io/ZaraDashboard/
+version: 1
+asMultiple: FALSE
+asStatic: FALSE

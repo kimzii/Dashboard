@@ -8,8 +8,6 @@ library(lubridate)
 library(readr)
 library(janitor)
 library(dplyr)
-
-# Load and clean data
 library(readr)
 library(janitor)
 library(dplyr)
@@ -21,7 +19,14 @@ zara_data <- read.csv("zara.csv", sep = ";", quote = "\"", stringsAsFactors = FA
 
 # UI
 ui <- dashboardPage(
-  dashboardHeader(title = "Zara Business Dashboard"),
+  dashboardHeader(
+    title = tags$div(
+      style = "display: flex; align-items: center; justify-content: center; width: 100%; padding-top: 5px",
+      tags$img(src = "zaralogo.png", height = "40px")
+    )
+  ),
+  
+  
   dashboardSidebar(
     sidebarMenu(
       menuItem("Overview", tabName = "overview"),
