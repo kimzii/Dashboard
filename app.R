@@ -107,17 +107,18 @@ ui <- dashboardPage(
       tabItem(tabName = "analytics",
               fluidRow(
                 box(
-                  title = "Descriptive Analytics Summary",
+                  title = "Sales & Price Distribution",
                   width = 12,
                   status = "primary",
                   solidHeader = TRUE,
                   collapsible = TRUE,
-                  pre(verbatimTextOutput("desc_summary"))
+                  plotlyOutput("desc_plot")
                 )
+                
               ),
               fluidRow(
                 box(
-                  title = "Diagnostic Analytics: Price vs Sales Correlation",
+                  title = "Price vs Sales Correlation",
                   width = 12,
                   status = "warning",
                   solidHeader = TRUE,
@@ -127,7 +128,7 @@ ui <- dashboardPage(
               ),
               fluidRow(
                 box(
-                  title = "Predictive Analytics: Predicted vs Actual Sales",
+                  title = "Predicted vs Actual Sales",
                   width = 12,
                   status = "success",
                   solidHeader = TRUE,
@@ -137,7 +138,7 @@ ui <- dashboardPage(
               ),
               fluidRow(
                 box(
-                  title = "Prescriptive Recommendations",
+                  title = "Recommendations",
                   width = 12,
                   status = "danger",
                   solidHeader = TRUE,
@@ -148,18 +149,43 @@ ui <- dashboardPage(
       ),
       
       tabItem(tabName = "about",
-              h3("Zara Sales Dashboard"),
-              p("This dashboard explores Zara's sales data with the goal of enhancing business decision-making."),
-              p("Key questions answered:"),
+              h2("About the Zara Sales Dashboard"),
+              br(),
+              p("This interactive dashboard provides a comprehensive snapshot of Zara's product performance using sales data."),
+              p("It was designed to support better business decisions by making data insights more visual, predictive, and actionable."),
+              
+              h4("🔍 Key Features:"),
               tags$ul(
-                tags$li("Which sections and products perform best?"),
-                tags$li("How do sales trends evolve over time?"),
-                tags$li("What sales can we expect in the near future?"),
-                tags$li("What strategies can improve future performance?")
+                tags$li(strong("Overview Tab: "), "Displays interactive charts including: 
+                   a pie chart titled 'Sales by Store Section', 
+                   a bar chart titled 'Sales by Product Category', 
+                   and a ranked list titled 'Top 10 Best-Selling Products'."),
+                tags$li(strong("Sales & Price Distribution: "), 
+                        "Visualizes the distribution of sales volume and product price using boxplots grouped by store section."),
+                tags$li(strong("Price vs Sales Correlation: "), 
+                        "Illustrates the correlation between product pricing and sales volume using a bar plot to highlight strength and direction."),
+                tags$li(strong("Predicted vs Actual Sales: "), 
+                        "Displays the predictive performance of a linear regression model by comparing predicted and actual sales in a scatter plot."),
+                tags$li(strong("Recommendations: "), 
+                        "Provides actionable recommendations based on observed performance, patterns, and prediction results.")
               ),
-              p("Dataset source:"),
-              a("Kaggle - Zara Sales Data", href = "https://www.kaggle.com/datasets/xontoloyo/data-penjualan-zara")
+              
+              h4("🎯 Purpose:"),
+              p("This dashboard was created to empower Zara’s retail strategy by providing clear visual cues, intelligent predictions, and actionable recommendations based on real-world data."),
+              
+              h4("📊 Dataset Information:"),
+              p("The dataset includes product-level information such as price, brand, promotional status, section, and recorded sales volume."),
+              p("All data is based on a single snapshot date (February 19), meaning analysis reflects a cross-sectional view."),
+              
+              h4("📁 Data Source:"),
+              tags$p(
+                "Dataset used in this dashboard was sourced from ",
+                a("Kaggle - Zara Sales Data", href = "https://www.kaggle.com/datasets/xontoloyo/data-penjualan-zara", target = "_blank"),
+                "."
+              )
       )
+      
+      
     )
   )
 )  
@@ -174,7 +200,7 @@ server <- function(input, output) {
       arrange(desc(total_sales))
     
     plot_ly(df, labels = ~section, values = ~total_sales, type = 'pie') %>%
-      layout(title = "Sales Distribution by Section",
+      layout(title = "",
              legend = list(orientation = 'h'))
   })
   
@@ -187,7 +213,7 @@ server <- function(input, output) {
     p <- ggplot(df, aes(x = reorder(product_category, total_sales), y = total_sales)) +
       geom_col(fill = "coral") +
       coord_flip() +
-      labs(title = "Sales by Product Category", x = "Category", y = "Units Sold")
+      labs(title = "", x = "Category", y = "Units Sold")
     
     ggplotly(p)
   })
@@ -200,10 +226,29 @@ server <- function(input, output) {
       ggplot(aes(x = reorder(name, total), y = total)) +
       geom_col(fill = "steelblue") +
       coord_flip() +
-      labs(title = "Top 10 Best-Selling Products", x = "Product", y = "Units Sold")
+      labs(title = "", x = "Product", y = "Units Sold")
     
     ggplotly(p)
   })
+  
+  output$desc_plot <- renderPlotly({
+    df <- zara_data %>%
+      select(sales_volume, price, section) %>%
+      drop_na()
+    
+    p <- ggplot(df, aes(x = section)) +
+      geom_boxplot(aes(y = sales_volume, fill = "Sales Volume"), alpha = 0.6) +
+      geom_boxplot(aes(y = price, fill = "Price"), alpha = 0.6, position = position_dodge(width = 0.75)) +
+      scale_fill_manual(values = c("Sales Volume" = "skyblue", "Price" = "salmon")) +
+      labs(title = "",
+           x = "Section",
+           y = "Value",
+           fill = "") +
+      theme_minimal()
+    
+    ggplotly(p)
+  })
+  
   
   output$desc_summary <- renderPrint({
     summary(zara_data %>% select(sales_volume, price))
@@ -215,7 +260,7 @@ server <- function(input, output) {
     p <- ggplot(data.frame(Feature = "Price", Correlation = corr_val), aes(x = Feature, y = Correlation)) +
       geom_col(fill = "tomato") +
       ylim(-1, 1) +
-      labs(title = "Correlation between Price and Sales Volume")
+      labs(title = "")
     
     ggplotly(p)
   })
@@ -224,7 +269,7 @@ server <- function(input, output) {
     p <- ggplot(model_data, aes(x = sales_volume, y = predicted_sales)) +
       geom_point(color = "steelblue") +
       geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
-      labs(title = "Predicted vs Actual Sales Volume", x = "Actual", y = "Predicted")
+      labs(title = "", x = "Actual", y = "Predicted")
     
     ggplotly(p)
   })
