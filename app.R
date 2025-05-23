@@ -8,14 +8,33 @@ library(lubridate)
 library(readr)
 library(janitor)
 library(dplyr)
-library(readr)
-library(janitor)
-library(dplyr)
 
 zara_data <- read.csv("zara.csv", sep = ";", quote = "\"", stringsAsFactors = FALSE) %>%
   janitor::clean_names()
 
+# Preprocess data for predictive modeling
+model_data <- zara_data %>%
+  select(sales_volume, price, product_category, section, promotion, seasonal, brand) %>%
+  drop_na()
 
+# Convert character columns to factor
+model_data <- model_data %>%
+  mutate(across(where(is.character), as.factor))
+
+# Remove factor columns with only one level
+model_data <- model_data %>%
+  select(where(function(col) {
+    if (is.factor(col)) {
+      nlevels(col) > 1
+    } else {
+      TRUE
+    }
+  }))
+
+
+set.seed(123)
+model <- train(sales_volume ~ ., data = model_data, method = "lm")
+model_data$predicted_sales <- predict(model, newdata = model_data)
 
 # UI
 ui <- dashboardPage(
@@ -26,7 +45,6 @@ ui <- dashboardPage(
     )
   ),
   
-  
   dashboardSidebar(
     sidebarMenu(
       menuItem("Overview", tabName = "overview"),
@@ -34,36 +52,101 @@ ui <- dashboardPage(
       menuItem("About", tabName = "about")
     )
   ),
+  
   dashboardBody(
+    tags$head(
+      tags$style(HTML("
+      .main-sidebar {
+        position: fixed;
+        height: 100%;
+        overflow: hidden;
+      }
+      .sidebar {
+        overflow-y: hidden !important;
+      }
+      .content-wrapper, .right-side {
+        margin-left: 230px;
+        overflow-y: auto;
+        height: 100vh;
+      }
+    "))
+    ),
     tabItems(
-      # Tab 1: Overview
       tabItem(tabName = "overview",
               fluidRow(
-                box(selectInput("category", "Select Section", choices = unique(zara_data$section), selected = unique(zara_data$section)[1]), width = 4),
-                box(plotlyOutput("sales_trend"), width = 8)
+                box(
+                  title = "Sales by Store Section",
+                  status = "info",
+                  solidHeader = TRUE,
+                  width = 6,
+                  collapsible = TRUE,
+                  plotlyOutput("sales_by_section")
+                ),
+                box(
+                  title = "Sales by Product Category",
+                  status = "primary",
+                  solidHeader = TRUE,
+                  width = 6,
+                  collapsible = TRUE,
+                  plotlyOutput("sales_by_category")
+                )
               ),
               fluidRow(
-                box(plotlyOutput("top_products"), width = 12)
+                box(
+                  title = "Top 10 Best-Selling Products",
+                  status = "success",
+                  solidHeader = TRUE,
+                  width = 12,
+                  collapsible = TRUE,
+                  plotlyOutput("top_products")
+                )
               )
       ),
+        
       
-      # Tab 2: Analytics
       tabItem(tabName = "analytics",
               fluidRow(
-                box(title = "Descriptive Analytics", width = 6, status = "primary",
-                    verbatimTextOutput("desc_summary")),
-                box(title = "Diagnostic Analytics", width = 6, status = "warning",
-                    plotlyOutput("correlation_plot"))
+                box(
+                  title = "Descriptive Analytics Summary",
+                  width = 12,
+                  status = "primary",
+                  solidHeader = TRUE,
+                  collapsible = TRUE,
+                  pre(verbatimTextOutput("desc_summary"))
+                )
               ),
               fluidRow(
-                box(title = "Predictive Analytics", width = 6, status = "success",
-                    plotlyOutput("forecast_plot")),
-                box(title = "Prescriptive Analytics", width = 6, status = "danger",
-                    verbatimTextOutput("recommendations"))
+                box(
+                  title = "Diagnostic Analytics: Price vs Sales Correlation",
+                  width = 12,
+                  status = "warning",
+                  solidHeader = TRUE,
+                  collapsible = TRUE,
+                  plotlyOutput("correlation_plot")
+                )
+              ),
+              fluidRow(
+                box(
+                  title = "Predictive Analytics: Predicted vs Actual Sales",
+                  width = 12,
+                  status = "success",
+                  solidHeader = TRUE,
+                  collapsible = TRUE,
+                  plotlyOutput("predicted_vs_actual")
+                )
+              ),
+              fluidRow(
+                box(
+                  title = "Prescriptive Recommendations",
+                  width = 12,
+                  status = "danger",
+                  solidHeader = TRUE,
+                  collapsible = TRUE,
+                  pre(verbatimTextOutput("recommendations"))
+                )
               )
       ),
       
-      # Tab 3: About
       tabItem(tabName = "about",
               h3("Zara Sales Dashboard"),
               p("This dashboard explores Zara's sales data with the goal of enhancing business decision-making."),
@@ -79,32 +162,41 @@ ui <- dashboardPage(
       )
     )
   )
-)
+)  
 
 # Server
 server <- function(input, output) {
   
-  filtered_data <- reactive({
-    zara_data %>% filter(section == input$category)
+  output$sales_by_section <- renderPlotly({
+    df <- zara_data %>%
+      group_by(section) %>%
+      summarise(total_sales = sum(sales_volume, na.rm = TRUE)) %>%
+      arrange(desc(total_sales))
+    
+    plot_ly(df, labels = ~section, values = ~total_sales, type = 'pie') %>%
+      layout(title = "Sales Distribution by Section",
+             legend = list(orientation = 'h'))
   })
   
-  output$sales_trend <- renderPlotly({
-    p <- filtered_data() %>%
-      group_by(scraped_at) %>%
+  output$sales_by_category <- renderPlotly({
+    df <- zara_data %>%
+      group_by(product_category) %>%
       summarise(total_sales = sum(sales_volume, na.rm = TRUE)) %>%
-      ggplot(aes(x = scraped_at, y = total_sales)) +
-      geom_line(color = "darkred") +
-      labs(title = "Sales Trend Over Time", x = "Date", y = "Units Sold")
+      arrange(desc(total_sales))
+    
+    p <- ggplot(df, aes(x = reorder(product_category, total_sales), y = total_sales)) +
+      geom_col(fill = "coral") +
+      coord_flip() +
+      labs(title = "Sales by Product Category", x = "Category", y = "Units Sold")
     
     ggplotly(p)
   })
   
-  
   output$top_products <- renderPlotly({
-    p <- filtered_data() %>%
+    p <- zara_data %>%
       group_by(name) %>%
       summarise(total = sum(sales_volume, na.rm = TRUE)) %>%
-      top_n(10, total) %>%
+      slice_max(total, n = 10) %>%
       ggplot(aes(x = reorder(name, total), y = total)) +
       geom_col(fill = "steelblue") +
       coord_flip() +
@@ -112,7 +204,6 @@ server <- function(input, output) {
     
     ggplotly(p)
   })
-  
   
   output$desc_summary <- renderPrint({
     summary(zara_data %>% select(sales_volume, price))
@@ -129,33 +220,22 @@ server <- function(input, output) {
     ggplotly(p)
   })
   
-  
-  output$forecast_plot <- renderPlotly({
-    ts_data <- filtered_data() %>%
-      group_by(scraped_at) %>%
-      summarise(total = sum(sales_volume, na.rm = TRUE))
-    
-    if (nrow(ts_data) < 15) {
-      return(NULL)
-    }
-    
-    ts_series <- ts(ts_data$total, frequency = 7)
-    model <- auto.arima(ts_series)
-    forecast_data <- forecast(model, h = 10)
-    
-    p <- autoplot(forecast_data) +
-      labs(title = "Forecast of Sales", y = "Units Sold", x = "Future Days")
+  output$predicted_vs_actual <- renderPlotly({
+    p <- ggplot(model_data, aes(x = sales_volume, y = predicted_sales)) +
+      geom_point(color = "steelblue") +
+      geom_abline(slope = 1, intercept = 0, linetype = "dashed", color = "red") +
+      labs(title = "Predicted vs Actual Sales Volume", x = "Actual", y = "Predicted")
     
     ggplotly(p)
   })
   
-  
   output$recommendations <- renderPrint({
-    cat("Recommendations for Section:", input$category, "\n")
+    cat("Recommendations based on snapshot data:\n")
     cat("- Increase stock for top-selling items.\n")
     cat("- Consider promotions for low-selling or high-priced items.\n")
     cat("- Place top items at high-traffic store positions like End-cap.\n")
-    cat("- Leverage forecast data to prepare for future demand.\n")
+    cat("- Use descriptive and diagnostic insights for inventory planning.\n")
+    cat("- Consider predictive model insights to forecast demand based on product features.\n")
   })
 }
 
